@@ -1,0 +1,22 @@
+
+* GET -> http://localhost:8082/users/products -> Fetches list of products (User service feign client call to product service)
+
+******************************************************
+
+POST -> http://localhost:8082/users/products -> Posts product from user to product MS
+
+payload for post :
+{
+  "id": "101",
+  "name": "Wireless Mouse"
+}
+
+****************************************************
+
+To verify if post has happened correctly from user to product service
+http://localhost:8083/products
+output :
+{
+    "id": "101",
+    "name": "Wireless Mouse"
+}
