@@ -24,3 +24,17 @@ output :
 **************************************************
 
 For delete API testing -> First post product through user then delete the same
+
+*************************************************
+
+Imp :
+How to set headers
+
+refer :     @PostMapping("/products") -> ProductClient
+
+@Headers({
+    "Content-Type: application/json",
+    "Custom-Header: MyValue"
+})
+
+**********************************************

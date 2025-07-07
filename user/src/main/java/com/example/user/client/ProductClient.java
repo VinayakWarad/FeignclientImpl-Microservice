@@ -1,6 +1,7 @@
 package com.example.user.client;
 
 import com.example.user.model.Product;
+import feign.Headers;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,6 +21,10 @@ public interface ProductClient {
     List<Product> getAllProducts();
 
     @PostMapping("/products")
+    @Headers({
+            "Content-Type: application/json",
+            "Custom-Header: MyValue"
+    })
     Product addProduct(@RequestBody Product product);
 
     @DeleteMapping("/products/{id}")
