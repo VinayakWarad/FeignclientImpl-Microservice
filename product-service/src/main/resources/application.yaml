@@ -1,0 +1,17 @@
+spring:
+  application:
+     name : product-service
+server:
+  port: 8083
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 5000
+#Use below property if you are using eureka
+#eureka:
+#  client:
+#    service-url:
+#      defaultZone: http://localhost:8761/eureka
+#@EnableDiscoveryClient -> Add this in mainclass if eureka is enabled
