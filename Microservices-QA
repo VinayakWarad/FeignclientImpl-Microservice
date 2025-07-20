@@ -1,0 +1,235 @@
+1.What are microservices?
+- Microservices are a software architecture style where an application is structured as a collection of small,
+loosely coupled, independently deployable services.Each service is focused on doing one specific business
+function well.
+
+2. Advantages of Microservices ?
+- Independent Deployability:
+- Single Responsibility: Each service is responsible for a specific feature or functionality
+- Technology Agnostic: Services can be built using different programming languages or technologies
+- Lightweight Communication: Typically, services communicate with each other using HTTP/REST, gRPC, or messaging systems like Kafka or RabbitMQ.
+- Fault Isolation: A failure in one service doesn't necessarily bring down the entire system.
+- Decentralized Data Management: Each service may manage its own database, reducing data coupling
+
+3. Disadvantages/ Challenges of microservice ?
+- Complexity in communication and data consistency
+- Requires robust monitoring, logging, and security
+- Higher initial setup and operational overhead
+
+-Inter-Service Communication : Services must communicate over the network, Network latency, failures, or message serialization/deserialization can cause issues.
+Needs robust retry logic, timeouts, and circuit breakers.
+-Data Consistency : Each microservice typically owns its own database.You can't rely on traditional ACID transactions; need eventual consistency or patterns like sagas.
+- Security : More services = more attack surfaces. Managing secrets and access control becomes more difficult.
+- Monitoring & Debugging : Logs and errors are spread across many services.Requires centralized logging, tracing (e.g. OpenTelemetry, Jaeger), and metrics (e.g. Prometheus, Grafana).
+- Deployment & DevOps Overhead : More services mean more pipelines, containers, and environments to manage.Requires CI/CD, container orchestration (e.g., Kubernetes), and infrastructure as code., Testing and deploying changes is more complex.
+- Service Dependency Management : Changes in one service may require coordination with others.Versioning APIs and ensuring backward compatibility is critical.
+- More demanding in terms of architecture and tooling expertise.
+
+3. How do microservices differ from monolithic architecture?
+Aspect	            Monolithic Architecture	                        Microservices Architecture
+Structure	        Single, unified codebase	                    Collection of small, independent services
+Development	        Simpler to develop initially	                Complex, requires managing multiple services
+Deployment	        Deployed as a single unit	                    Services can be deployed independently
+Scalability	        Scale the whole application                     Scale individual services
+Fault Isolation	    One failure can affect the entire application	Failure isolated to specific services
+Technology Stack	Typically uses one stack throughout	            Each service can use a different stack
+Data Management	    Single database	                                Each service may have its own database
+Communication	    Internal function/method calls	                Inter-service communication via APIs or messaging
+Team Organization	Often requires tight coordination between teams	Teams can own and manage individual services
+Codebase            Complexity	Becomes harder to manage            Easier to manage per service, but overall complexity rises
+                       as the app grows
+Testing         	Easier to test as one unit	                    More complex due to multiple services
+Initial Setup	    Faster setup and development	                Requires robust infrastructure and DevOps
+Best For	        Small to medium-sized applications	            Large, complex, or rapidly scaling applications
+
+--------------------------------------------------------------------------------------
+4. What are the key components of a microservices architecture?
+Key components of microservices architecture are designed to enable modular, scalable, and independently deployable services
+- Services (Microservices)
+Definition: Small, independently deployable units focused on a specific business function.
+Key Traits: Loosely coupled, Highly cohesive, Independently deployable.
+
+- API Gateway: Entry point for clients; routes requests to appropriate microservices.
+Responsibilities: Request routing, Authentication/authorization, Rate limiting, Aggregating responses
+
+- Service Discovery:  Allows services to find and communicate with each other without hardcoded locations.
+ Types :
+  Client-side discovery (e.g., Netflix Eureka)
+  Server-side discovery (e.g., with a load balancer)
+
+- Authentication and Authorization:
+- Centralized security management.Often implemented with: (OAuth2, JWT ) / Identity providers (e.g., Keycloak, Auth0)
+
+- Monitoring and Logging:
+Track health and performance of services.
+Logging: ELK Stack (Elasticsearch, Logstash, Kibana), Fluentd
+
+- Inter-Service Communication
+Methods:
+   Synchronous: REST/HTTP, gRPC
+   Asynchronous: Messaging queues (Kafka, RabbitMQ, NATS)
+
+- Configuration Management
+ Centralized configuration service to manage environment-specific configs.
+ Tools: Spring Cloud Config, Consul, etcd
+
+- Data Management
+Each service typically manages its own database (Database per service pattern).
+Promotes isolation and avoids tight coupling.
+
+- CI/CD Pipelines
+ Automates testing, building, and deployment of services.
+ Tools: Jenkins, GitLab CI/CD, GitHub Actions, Argo CD
+
+- Testing Infrastructure : Unit tests, Integration tests, Contract tests (e.g., Pact) , End-to-end tests
+
+----------------------------------------------------------------------------------------------------------
+
+5. What is a service registry and why is it used?
+A service registry is a centralized database or directory used in microservices architectures to keep track of all the
+services available in a system, including their locations (network addresses), metadata, and status.
+
+-Register themselves when they start up
+-Deregister when they shut down
+-Discover other services dynamically when needed
+
+| Purpose               | Explanation                                                                  |
+| --------------------- | ---------------------------------------------------------------------------- |
+| **Service Discovery** | Allows services to find and communicate with each other dynamically.         |
+| **Load Balancing**    | Supports client-side or server-side load balancing using multiple instances. |
+| **Fault Tolerance**   | Helps reroute traffic away from failed service instances.                    |
+| **Decoupling**        | Services don’t need hardcoded endpoints or configuration files.              |
+| **Scaling**           | Makes it easy to add/remove instances as services scale up/down.             |
+
+Common Service Registries:
+Eureka (from Netflix)
+Consul (by HashiCorp)
+Zookeeper (by Apache)
+Etcd (used in Kubernetes)
+
+----------------------------------------------
+6. How do microservices communicate with each other?
+
+----------------------------------------------
+
+7. What is REST and how is it used in microservices?
+- REST (Representational State Transfer) is an architectural style for designing networked applications, especially web
+services. It uses standard HTTP methods (like GET, POST, PUT, DELETE) to enable communication between clients and servers.
+REST is stateless and resource-based and HTTP methods define what action is performed on that resource.
+REST is a common way for services to communicate with each other over HTTP
+-Each microservice typically exposes a RESTful API so that other services (or external clients) can interact with it
+using HTTP requests.
+
+Limitations :
+| Limitation               | When it matters                                                     |
+| ------------------------ | ------------------------------------------------------------------- |
+| ❌ **Chattiness**         | Lots of small REST calls can slow down performance                  |
+| ❌ **Tight Coupling**     | Services may need to know too much about each other’s API contracts |
+| ❌ **Error Propagation**  | One failure (e.g. a service is down) can ripple through the system  |
+| ⚠️ **No Built-in Async** | REST is mostly synchronous — harder to build reactive systems       |
+
+Alternatives to REST in Microservices
+gRPC (binary, fast, contract-based)
+GraphQL (flexible queries)
+Event-driven communication (via Kafka, RabbitMQ, etc.)
+
+----------------------------------------------------------------------------------------
+
+8. What is the role of an API Gateway in microservices?
+- An API Gateway is a central entry point for all client requests in a microservices architecture. It acts as a reverse
+proxy, routing requests to the appropriate microservice and handling cross-cutting concerns like authentication, rate
+ limiting, and logging.
+
+
+9. How do you handle service discovery in microservices?
+
+10. What is meant by "bounded context"?
+
+11. Kubernetes service registry and load balancing ?
+
+12.
+----------------------------------------------------------------------------------------------
+13. Java records ? Java 17
+- We can read this class object but can't modify (Oly getter and no setter methods)
+- You can initialize data only once and whatever we will have given while object creation that will be final.
+
+----------------------------------------------------------------------------------------------
+API Gateway / Edge server
+
+14. Default service name, Servicename with lower case
+
+Custom routing
+
+-----------------------------------------------------------------------------------------------
+15. Service discovery and load balancing in K8's
+- Inside k8's envt connsider MS-A is calling MS-B (2 instances), If one instance of B is down k8's is down
+Note :
+- Instance is considered to be down when liveness and readliness of it is false.
+-
+
+internal Kubernetes DNS
+
+-------------------------------------------------------------------------------------------------
+
+16. Circuit breaker ? Resiliance4J / Hystrix
+
+Ratelimitter and retry logic :
+application.yml -
+
+resilience4j:
+  ratelimiter:
+    instances:
+      ms2Service:
+        limitForPeriod: 5 # Guard allows 5 members every second - this time is configured below
+        limitRefreshPeriod: 1s #
+        timeoutDuration: 0   # If 6th member comes then don't allow him / fail immediately .. also it is not mandatory that 6th call should go for retry
+
+# Then when does retry happens ? If RateLimiter permits the call, but the call fails with a retryable exception (like IOException or TimeoutException):Retry retries the call, again subject to RateLimiter checks for each retry
+  retry:
+    instances:
+      ms2Service:
+        maxAttempts: 3
+        waitDuration: 500ms
+        retryExceptions:
+          - java.io.IOException                     // Decides in which situation retry should happen on req
+          - java.util.concurrent.TimeoutException   // Decides in which situation retry should happen on req
+
+# Time limitter :
+resilience4j:
+  timelimiter:
+    instances:
+      ms2Service:
+        timeoutDuration: 2s   # Max allowed duration for a call
+        cancelRunningFuture: true
+
+Below methos in service class and called in controller :
+
+@CircuitBreaker(name = "ms2Service", fallbackMethod = "circuitFallback")
+@RateLimiter(name = "ms2Service", fallbackMethod = "rateLimitFallback")
+@Retry(name = "ms2Service", fallbackMethod = "retryFallback")
+@TimeLimiter(name = "ms2Service", fallbackMethod = "fallback")
+public Mono<String> callMS2() {
+    return webClient.get()
+            .uri("/api/data")
+            .retrieve()
+            .bodyToMono(String.class)
+            .timeout(Duration.ofSeconds(2)); // simulate possible timeout
+}
+
+public Mono<String> rateLimitFallback(RequestNotPermitted ex) {
+    return Mono.just("❌ Rate limit exceeded! Guard says: Wait your turn.");
+}
+
+public Mono<String> retryFallback(Throwable ex) {
+        if (ex instanceof TimeoutException) { // This is configured in application props of when retry should happen
+            return Mono.just("⏱️ Fallback: Timeout after retries");
+        } else {
+            return Mono.just("❌ Fallback: " + ex.getClass().getSimpleName());
+        }
+    }
+
+    public Mono<String> circuitFallback(Throwable ex) {
+        return Mono.just("🛑 CircuitBreaker fallback: MS-2 unavailable");
+    }
+}
+
