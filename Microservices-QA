@@ -172,6 +172,16 @@ internal Kubernetes DNS
 -------------------------------------------------------------------------------------------------
 
 16. Circuit breaker ? Resiliance4J / Hystrix
+ OR How to make your system fault tolerant
+ Explain ratelimitter , Timelimitter, Retry in Microservices.
+
+- Also refer circuit breaker notes
+Order :
+1. 🔁 Retry
+2. 📉 RateLimiter
+3. 🚦 CircuitBreaker
+4. ⏱️ TimeLimiter
+5. ⚙️ Your actual business logic (e.g., WebClient)
 
 Ratelimitter and retry logic :
 application.yml -
@@ -202,7 +212,19 @@ resilience4j:
         timeoutDuration: 2s   # Max allowed duration for a call
         cancelRunningFuture: true
 
-Below methos in service class and called in controller :
+resilience4j:
+  circuitbreaker:
+    instances:
+      ms2Service:
+        slidingWindowSize: 10                 # How many calls to evaluate
+        minimumNumberOfCalls: 5              # Minimum calls to start evaluating
+        failureRateThreshold: 50             # % failure rate to trip breaker
+        slowCallDurationThreshold: 2s        # If a call takes longer, it’s "slow"
+        slowCallRateThreshold: 50            # % slow calls to also trip breaker
+        waitDurationInOpenState: 10s         # Stay OPEN this long before trying again
+
+
+Below method in service class and called in controller :
 
 @CircuitBreaker(name = "ms2Service", fallbackMethod = "circuitFallback")
 @RateLimiter(name = "ms2Service", fallbackMethod = "rateLimitFallback")
@@ -233,3 +255,69 @@ public Mono<String> retryFallback(Throwable ex) {
     }
 }
 
+Consider the scenario where MS-1 calls MS-2:
+
+* Circuit Breaker will prevent MS-1 from making repeated calls to MS-2 if it detects failures (e.g., 50% failure rate).
+* If the call is not successful, Retry will attempt the request a few more times before either giving up or executing a fallback.
+* If MS-2 becomes slow (e.g., response time > 2s), a TimeLimiter will trigger a timeout, and MS-1 will retry or fall back.
+* In case of too many calls hitting MS-2, the RateLimiter will block some requests to avoid overloading it.
+* Bulkhead limits concurrent calls to MS-2 to ensure that it doesn't get overwhelmed by too many requests at once.
+* Health checks will be continuously monitored to ensure that MS-2 is healthy, and Kubernetes will route traffic only to healthy instances.
+
+-------------------------------------------------------------------------------------------------
+
+17. What is bulkhead pattern
+
+The Bulkhead Pattern is one of the resilience patterns commonly used in microservice architectures to improve fault tolerance and isolation
+ In a microservice system, if one service (or one part of a service) fails, it doesn't bring down the whole system.
+
+Semaphore Bulkhead for External Service Calls
+Imagine you have a Spring Boot application that calls an external API to fetch product details. You want to limit the number of concurrent requests
+that can be made to the external API at any given time because the external service might get overwhelmed with too many concurrent calls.
+
+Example code :
+Step 1: Setup the Service with Semaphore Bulkhead
+
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import org.springframework.stereotype.Service;
+
+@Service
+public class ProductService {
+
+    @Bulkhead(name = "productServiceBulkhead", type = Bulkhead.Type.SEMAPHORE)
+    public String getProducts() {
+        // Simulate calling an external API which takes time
+        try {
+            Thread.sleep(2000);  // Simulate API delay
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return "Product list fetched";
+    }
+}
+
+@Bulkhead annotation is used to apply the Semaphore Bulkhead pattern to the getProducts() method.
+This method simulates an external API call with a 2-second delay (Thread.sleep(2000)).
+
+Step 2: Configuration in application.yml
+In your configuration, you define the maxConcurrentCalls setting to control how many requests can run concurrently.
+resilience4j:
+  bulkhead:
+    instances:
+      productServiceBulkhead:
+        maxConcurrentCalls: 3  # Limit to 3 concurrent requests
+
+maxConcurrentCalls is set to 3, meaning no more than 3 requests to getProducts() can be in-progress simultaneously.
+
+Step 3: How It Works (Request Flow)
+Request 1: The first request to /products comes in and acquires a permit from the semaphore. Now 1 task is running.
+Request 2: The second request comes in and also acquires a permit. Now there are 2 tasks running concurrently.
+Request 3: The third request comes in and acquires a permit. Now there are 3 tasks running concurrently.
+Request 4: The fourth request comes in, but the semaphore only allows 3 concurrent tasks. Since all the "permits" are taken, this request will either:
+Wait for a permit to become available, or Be rejected depending on how you've configured it.
+Request 5: The fifth request comes in and will also wait for a permit to become available.
+
+When to Use Semaphore Bulkhead:
+For limiting access to shared resources like an external service, database, or critical section in the code, without needing to manage threads directly.
+When you want to control task concurrency rather than thread usage.
+-----------------------------------------------------------------------------------------
