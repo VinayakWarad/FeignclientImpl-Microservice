@@ -520,6 +520,95 @@ Isolation.REPEATABLE_READ
 Isolation.SERIALIZABLE
 
 --------------------------------------------------------------------------------------------------
+22. Diff between kibana and zipkin
 
+| Aspect                     | Kibana                                                                                      | Zipkin                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Primary Use Case**       | Visualization and analysis of **logs** and **metrics** from various sources (Elasticsearch) | Visualization and analysis of **distributed traces** (timing data for requests) |
+| **Data Type**              | Logs, metrics, events                                                                       | Distributed tracing spans (trace & timing info)                                 |
+| **Integration**            | Works with the **Elastic Stack** (Elasticsearch, Logstash, Beats)                           | Works with tracing instrumentation libraries (e.g., Brave, OpenTelemetry)       |
+| **Focus**                  | Searching, filtering, and analyzing large volumes of log data                               | Visualizing request flows and latencies across microservices                    |
+| **Output**                 | Dashboards with charts, graphs, search results                                              | Trace timelines showing calls between services and durations                    |
+| **Use in Troubleshooting** | Log aggregation to find errors, exceptions, trends                                          | Pinpoint latency bottlenecks and failures in distributed transactions           |
+| **Architecture**           | Part of Elastic Stack                                                                       | Standalone distributed tracing system                                           |
+| **Example**                | View logs from servers, apps, network devices                                               | View how a user request passes through multiple microservices                   |
 
+When to use which?
 
+Use Kibana if you want to:
+Search and analyze logs.
+Create dashboards for metrics and logs.
+Perform log aggregation and monitoring.
+
+Use Zipkin if you want to:
+Trace requests as they flow through distributed systems.
+Identify where latency or failures occur across services.
+Visualize service dependencies and call sequences.
+
+| Tool   | Logs & Metrics | Distributed Tracing | Visualization of Request Flows |
+| ------ | -------------- | ------------------- | ------------------------------ |
+| Kibana | ✅              | ❌                   | ❌                              |
+| Zipkin | ❌              | ✅                   | ✅                              |
+
+-------------------------------------------------------------------------------------------
+
+22. How pagination is implemented in REST API's
+- You want to fetch chunks of data (pages) instead of loading everything at once
+Spring Boot
+Spring Data JPA
+Pageable, Page<T> interfaces
+
+Step 1 :
+@Entity
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String email;
+    // Getters and Setters
+}
+
+Step 2 :
+public interface UserRepository extends JpaRepository<User, Long> {
+    // No need to write any code — JpaRepository includes pagination support
+}
+
+Step 3 :
+@Service
+public class UserService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    public Page<User> getAllUsers(Pageable pageable) {
+        return userRepository.findAll(pageable);
+    }
+}
+
+Step 4 :
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+
+    @Autowired
+    private UserService userService;
+
+    @GetMapping
+    public ResponseEntity<Page<User>> getUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id") String sortBy
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
+        Page<User> userPage = userService.getAllUsers(pageable);
+        return ResponseEntity.ok(userPage);
+    }
+}
+
+GET /api/users?page=1&size=5&sortBy=name  (For every new page this call will be done)
+✅ Returns users 6–10, sorted by name.
+
+--------------------------------------------------------------------------------------
+
+23. What is idempotence in REST API's?
