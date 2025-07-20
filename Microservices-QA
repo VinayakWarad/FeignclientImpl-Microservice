@@ -320,4 +320,206 @@ Request 5: The fifth request comes in and will also wait for a permit to become 
 When to Use Semaphore Bulkhead:
 For limiting access to shared resources like an external service, database, or critical section in the code, without needing to manage threads directly.
 When you want to control task concurrency rather than thread usage.
------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------
+
+18. What are the design patterns that can be implemented in Microservices?
+-These patterns provide the building blocks for developing scalable, reliable, and maintainable
+microservices. They address issues like service discovery, fault tolerance, data consistency, security,
+and inter-service communication. The choice of patterns depends on the use case, system requirements,
+and operational goals of the microservices architecture.
+
+API Gateway Pattern* (Spring Cloud Gateway)
+Service Discovery Pattern* (Netflix Eureka, Zookeeper)
+Circuit Breaker Pattern* (Resilience4j,Hystrix,  Spring Cloud Circuit Breaker)
+Saga Pattern* (Camunda)
+Strangler Fig Pattern
+Client-Side Load Balancing Pattern (Netflix Ribbon, Spring Cloud LoadBalancer)
+Observer Pattern* (Kafka, RabbitMQ)
+Sidecar Pattern
+
+--------------------------------------------------------------------------------------------------
+19. What is Saga pattern?
+The Saga Pattern is a design pattern used to manage distributed transactions and long-running processes,
+typically in microservices architectures. Unlike traditional monolithic systems where a transaction can be handled by a single service, in a distributed system, each step of a business process may be handled by a different service. This introduces the challenge of maintaining consistency and handling failures across multiple services.
+
+The Saga Pattern solves this problem by breaking down a long-running transaction into a series of
+smaller, isolated transactions (called "sagas"). Each of these transactions has a compensating action
+that can be triggered in case of failure to undo the work done by previous steps
+
+Key Concepts:
+* Saga: A sequence of local transactions where each transaction is managed by a different service.
+If a transaction fails, the saga ensures that compensating transactions are triggered to revert the changes made by previous steps.
+
+* Local Transactions: Each step of the saga is a local transaction executed by a specific service. These local transactions are typically short-running and complete within the service's own boundaries.
+
+* Compensating Transactions: If one step in the saga fails, compensating transactions are executed to reverse the work done in the previous steps. For example, if a payment service successfully processes a payment but an order service fails, a compensating transaction might cancel the payment.
+
+* Choreography vs Orchestration:
+   Choreography: Each service knows what to do next in case of a failure, and they communicate with each other in a decentralized manner. There is no central coordinator; each service acts as both the participant and the orchestrator.
+   Orchestration: There is a central service (or orchestrator) that controls the flow of the saga, including deciding the next step and handling failures.
+
+Example:
+Let's consider an example of an online purchase process where a customer buys an item,
+and the steps might be:
+
+a. Reserve Item: A service reserves the item in stock.
+b. Charge Payment: A service processes the payment.
+c. Ship Item: A service ships the item to the customer.
+d. If the payment step fails after reserving the item, a compensating transaction might be:
+Cancel Reservation: The service would release the reserved item so it can be sold to someone else.
+
+Pros of Saga Pattern:
+Resilience: By breaking down a long-running transaction into smaller steps, the system can recover from partial failures more gracefully.
+Scalability: Since each service only manages its own transactions, it can be scaled independently.
+Decentralized: Choreography allows each service to be more autonomous.
+
+Cons of Saga Pattern:
+Complexity: Managing multiple services and ensuring consistency can be complicated.
+Eventual Consistency: Unlike ACID transactions, sagas are based on eventual consistency, which means there might be a delay before the system reaches a consistent state after a failure.
+
+public class SagaOrchestrator {
+
+    private final OrderService orderService = new OrderService();
+    private final PaymentService paymentService = new PaymentService();
+    private final ShippingService shippingService = new ShippingService();
+
+    public void executeSaga(String orderId) {
+        try {
+            // Step 1: Reserve item
+            if (!orderService.reserveItem(orderId)) {
+                throw new RuntimeException("Item reservation failed");
+            }
+
+            // Step 2: Charge payment
+            if (!paymentService.charge(orderId)) {
+                throw new RuntimeException("Payment failed");
+            }
+
+            // Step 3: Ship item
+            if (!shippingService.ship(orderId)) {
+                throw new RuntimeException("Shipping failed");
+            }
+
+            System.out.println("[Saga] Order " + orderId + " completed successfully.");
+
+        } catch (Exception e) {
+            System.out.println("[Saga] Error: " + e.getMessage());
+            compensate(orderId);
+        }
+    }
+
+    private void compensate(String orderId) {
+        // Roll back in reverse order
+        shippingService.cancelShipping(orderId);
+        paymentService.refund(orderId);
+        orderService.cancelReservation(orderId);
+        System.out.println("[Saga] Compensation completed for order " + orderId);
+    }
+
+    // --- Services below (simplified) ---
+
+    static class OrderService {
+        boolean reserveItem(String orderId) {
+            System.out.println("[OrderService] Reserved item for " + orderId);
+            return true;
+        }
+
+        void cancelReservation(String orderId) {
+            System.out.println("[OrderService] Canceled reservation for " + orderId);
+        }
+    }
+
+    static class PaymentService {
+        boolean charge(String orderId) {
+            System.out.println("[PaymentService] Charged payment for " + orderId);
+            return true; // Simulate success
+        }
+
+        void refund(String orderId) {
+            System.out.println("[PaymentService] Refunded payment for " + orderId);
+        }
+    }
+
+    static class ShippingService {
+        boolean ship(String orderId) {
+            System.out.println("[ShippingService] Shipped order " + orderId);
+            return false; // Simulate failure
+        }
+
+        void cancelShipping(String orderId) {
+            System.out.println("[ShippingService] Canceled shipping for " + orderId);
+        }
+    }
+
+    // --- Main method to run the saga ---
+    public static void main(String[] args) {
+        SagaOrchestrator saga = new SagaOrchestrator();
+        saga.executeSaga("ORDER123");
+    }
+}
+
+----------------------------------------------------------------------------------------------------
+20. 🌿 What is the Strangler Fig Pattern?
+* The Strangler Fig Pattern is a software design approach used for gradually replacing or migrating
+ a legacy system by incrementally building a new system around the edges, slowly "strangling" the old
+ system until it can be fully retired.
+* The name comes from the strangler fig tree, which grows around an existing tree and eventually replaces it.
+
+ How it works:
+You leave the old system running but route some functionality or traffic to a new system/module.
+Over time, more and more functionality is redirected to the new system.
+Eventually, the old system is completely replaced without a big-bang rewrite.
+
+----------------------------------------------------------------------------------------------------
+21. ACID properties in the context of Java, particularly when working with databases using JDBC,
+JPA/Hibernate, or Spring Transaction Management.
+
+ Technologies Involved:
+Spring Framework (especially @Transactional)
+Spring Data JPA
+Hibernate (the default JPA provider)
+Relational Database (e.g., MySQL, PostgreSQL)
+
+| Property        | Meaning                                                       |
+| --------------- | ------------------------------------------------------------- |
+|     Atomicity   | All parts of a transaction succeed or none do.                |
+|     Consistency | The database moves from one valid state to another.           |
+|     Isolation   | Concurrent transactions do not interfere with each other.     |
+|     Durability  | Once committed, changes are permanent even if a crash occurs. |
+
+Using Spring with JPA/Hibernate
+Spring provides declarative transaction management which handles ACID behind the scenes.
+@Service
+public class BankService {
+
+    @Autowired
+    private AccountRepository accountRepo;
+
+    @Transactional(isolation = Isolation.READ_COMMITTED) // Default
+    public void transfer(Long fromId, Long toId, double amount) {
+        Account from = accountRepo.findById(fromId).orElseThrow();
+        Account to = accountRepo.findById(toId).orElseThrow();
+
+        from.setBalance(from.getBalance() - amount);
+        to.setBalance(to.getBalance() + amount);
+
+        // JPA will commit automatically or rollback if exception is thrown
+    }
+}
+
+ACID Mapping in Spring + JPA :
+Atomicity: Spring’s @Transactional ensures rollback on exceptions.
+Consistency: JPA validates and manages entity states.
+Isolation: Controlled via @Transactional(isolation = Isolation.SERIALIZABLE) etc.
+Durability: Changes committed to the DB are durable.
+
+Isolation.DEFAULT
+Isolation.READ_UNCOMMITTED
+Isolation.READ_COMMITTED
+Isolation.REPEATABLE_READ
+Isolation.SERIALIZABLE
+
+--------------------------------------------------------------------------------------------------
+
+
+
