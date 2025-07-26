@@ -147,7 +147,6 @@ proxy, routing requests to the appropriate microservice and handling cross-cutti
 
 11. Kubernetes service registry and load balancing ?
 
-12.
 ----------------------------------------------------------------------------------------------
 13. Java records ? Java 17
 - We can read this class object but can't modify (Oly getter and no setter methods)
@@ -174,6 +173,12 @@ internal Kubernetes DNS
 16. Circuit breaker ? Resiliance4J / Hystrix
  OR How to make your system fault tolerant
  Explain ratelimitter , Timelimitter, Retry in Microservices.
+
+ What is circuit breaker ?
+ A Circuit Breaker is a design pattern that prevents an application from repeatedly trying to
+perform an operation that's likely to fail. In microservices, it's typically implemented using tools
+like Netflix Hystrix or Resilience4j. It helps to improve fault tolerance by providing fallback mechanisms
+when a service is unavailable.
 
 - Also refer circuit breaker notes
 Order :
@@ -338,7 +343,8 @@ Observer Pattern* (Kafka, RabbitMQ)
 Sidecar Pattern
 
 --------------------------------------------------------------------------------------------------
-19. What is Saga pattern?
+19. What is Saga pattern? How do you handle transactions across multiple microservices?
+
 The Saga Pattern is a design pattern used to manage distributed transactions and long-running processes,
 typically in microservices architectures. Unlike traditional monolithic systems where a transaction can be handled by a single service, in a distributed system, each step of a business process may be handled by a different service. This introduces the challenge of maintaining consistency and handling failures across multiple services.
 
@@ -619,7 +625,8 @@ How load balancing is handled in your project ?
 
 - When you call: http://thirdpartymgmt/...
 you're hitting the Kubernetes Service named thirdpartymgmt.
-This service sits in front of multiple Pods (replicas of your microservice) and handles load balancing across them automatically.
+This service sits in front of multiple Pods (replicas of your microservice) and handles load balancing across
+them automatically.
 
 🔧 Internally:
 thirdpartymgmt is a ClusterIP service (default type).
@@ -682,7 +689,8 @@ spec:
     targetPort: 8080 # Container port in the pods
   type: ClusterIP    # Default type for internal-only load balancing
 
-📌 This service allows internal access to http://thirdpartymgmt and load balances across the pods matched by app: thirdpartymgmt.
+📌 This service allows internal access to http://thirdpartymgmt and load balances across the pods matched
+by app: thirdpartymgmt.
 
 3. DNS Resolution (automatic)
 No file needed — Kubernetes automatically handles service discovery via CoreDNS.
@@ -691,7 +699,8 @@ http://thirdpartymgmt (from same namespace)
 http://thirdpartymgmt.<namespace>.svc.cluster.local (from other namespaces)
 
 4. (Optional) Ingress — for external traffic (not needed for internal load balancing)
-If you're accessing the service from outside the cluster, you’d define an Ingress, but for internal-only load balancing, it’s not required.
+If you're accessing the service from outside the cluster, you’d define an Ingress, but for internal-only load balancing,
+it’s not required.
 
 🔄 Internal Load Balancing Process
 A pod (client) makes a request to http://thirdpartymgmt/...
@@ -847,4 +856,74 @@ spec:
                 name: order-service
                 port:
                   number: 80
+
+-----------------------------------------------------------------------------
+27. What is Spring Boot’s Actuator, and how is it useful in microservices?
+Spring Boot Actuator provides a set of production-ready features like health checks, metrics,
+application information, and more. It helps in monitoring microservices by providing endpoints such as
+/actuator/health, /actuator/metrics, /actuator/info, etc. This is crucial for maintaining and monitoring
+microservices in a production environment
+
+/actuator/metrics
+Exposes application metrics like memory usage, JVM stats, garbage collection counts, and more.
+
+/actuator/health
+Provides detailed health information about your application, such as database connectivity, disk space, and other critical services.
+
+/actuator/env
+Exposes information about the current environment, including system properties, environment variables, and application properties.
+------------------------------------------------------------------------------
+28. What is Spring Cloud Config?
+ Spring Cloud Config is a centralized configuration server that stores configuration properties for
+applications running in different environments. It allows microservices to fetch configuration
+properties from a central repository, ensuring consistency across multiple instances of services.
+
+-------------------------------------------------------------------------------
+
+29. How does Spring Cloud handle service discovery?
+Spring Cloud uses service discovery to allow services to find and communicate with each other dynamically.
+Netflix Eureka is commonly used for service discovery. Services register themselves with Eureka, and
+other services can look up these services using Eureka's API.
+
+------------------------------------------------------------------------------
+
+30. What is an API Gateway, and why is it used in microservices?
+An API Gateway is a server that acts as an entry point for client requests to access multiple microservices.
+ It handles routing, load balancing, security, and other cross-cutting concerns. Popular implementations
+are Zuul and Spring Cloud Gateway.
+
+-----------------------------------------------------------------------------
+31. How do you manage inter-service communication in a microservices architecture?
+Synchronous communication: Using REST (HTTP) or gRPC for real-time communication.
+
+Asynchronous communication: Using message brokers like RabbitMQ, Kafka, or JMS for decoupled and
+ reliable communication.
+
+------------------------------------------------------------------------------
+
+32.What are the different types of database strategies used in microservices?
+
+Database per service: Each microservice has its own database, ensuring loose coupling.
+
+Shared database: Multiple services share the same database, though this is not recommended due to tight coupling.
+
+-------------------------------------------------------------------------------
+
+33. What is the role of Docker and Kubernetes in microservices?
+Docker: Docker containers are used to package microservices along with their dependencies,
+ensuring they run consistently across different environments. It simplifies the deployment of microservices.
+
+Kubernetes: Kubernetes is used for orchestrating and managing Docker containers at scale. It automates
+the deployment, scaling, and management of microservices.
+
+--------------------------------------------------------------------------------
+
+34. How do you ensure data consistency in a microservices architecture?
+
+Eventual Consistency: Microservices might use eventual consistency to achieve data synchronization across
+services. This can be achieved through event-driven architectures, using message brokers (Kafka, RabbitMQ).
+
+Distributed transactions: Using patterns like Saga or compensating transactions to manage consistency.
+
+---------------------------------------------------------------------------------
 

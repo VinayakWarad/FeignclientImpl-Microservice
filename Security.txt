@@ -1,0 +1,243 @@
+1. How security is implemnted in out project ?
+
+Consider below scenario
+
+1. MS1 is calling MS2
+2. Consider MS1 got JWT connecting to Keycloak, and MS1 did webclient call to MS2.(webclient call header contains JWT token now.)
+3. Above req is received at MS2 and MS2 should now validate token from headers of received webclient call.
+
+Write the Code responsible for validating that header is below
+
+Answer :
+
+https://paussource.ent.hcl.com/gitlab/usis/CACSAD/c360-common/-/blob/develop/c360-common-libs/common-cacs-token-validator/src/main/java/com/cgi/c360/cacs/token/validator/JwtAuthenticationFilter.java?ref_type=heads
+
+package com.hcl.c360.orileo.token.validator;
+
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.security.PublicKey;
+import java.security.interfaces.RSAPublicKey;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.auth0.jwk.Jwk;
+import com.auth0.jwk.JwkException;
+import com.auth0.jwk.JwkProvider;
+import com.auth0.jwk.JwkProviderBuilder;
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.interfaces.DecodedJWT;
+import com.auth0.jwt.interfaces.Verification;
+
+import lombok.extern.slf4j.XSlf4j;
+
+@Component
+@XSlf4j
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+	private static final String INVALID_TOKEN_ERROR = "Failed to validate the token";
+	private static final String NO_TOKEN_ERROR = "Bearer Token not provided";
+	private static final String AUTH_STR = "Authorization";
+	private static final String BEARER_STR = "Bearer ";
+	private static final String RSA256 = "RS256";
+	private static final String RSA384 = "RS384";
+	private static final String RSA512 = "RS512";
+
+	private final String jwksUrl;
+	private final List<String> allAuthSkipUrls;
+
+	@Autowired
+	public JwtAuthenticationFilter(@Value("${cacs.security.jwks-url:}") String jwksUrl,
+					@Value("${auth.skip.urls:}") String[] authSkipUrlArray,
+					@Value("${server.servlet.context-path:}") String contextPath,
+					@Value("${management.endpoints.web.base-path:/actuator}") String actuatorPath) {
+		this.jwksUrl = jwksUrl;
+
+		allAuthSkipUrls = new ArrayList<>();
+		// Implicitly include actuator endpoint in the auth.skip.urls list
+		allAuthSkipUrls.add(contextPath + actuatorPath + "/**");
+		allAuthSkipUrls.addAll(Arrays.asList(authSkipUrlArray));
+
+		log.debug("Context Path: {}", contextPath);
+		log.debug("Actuator Path: {}", actuatorPath);
+		log.debug("Auth skip URLs: {}", allAuthSkipUrls);
+	}
+
+	/**
+	 * Default filter method
+	 */
+	@Override
+	public void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+			throws IOException, ServletException {
+		String header = request.getHeader(AUTH_STR);
+		String authToken = null;
+
+		if (header != null && header.startsWith(BEARER_STR)) {
+
+			authToken = header.replace(BEARER_STR, "");
+
+			try {
+				DecodedJWT decodedJWT = JWT.decode(authToken);
+				log.info("security.jwks-url {} ",jwksUrl);
+				JwkProvider provider = new JwkProviderBuilder(
+						new URL(jwksUrl)).build();
+				Jwk jwk = provider.get(decodedJWT.getKeyId());
+				Algorithm algorithm = getAlgorithm(decodedJWT.getAlgorithm(), jwk.getPublicKey());
+				Verification verifier = JWT.require(algorithm);
+				verifier.build().verify(decodedJWT);
+				filterChain.doFilter(request, response);
+			} catch (IllegalArgumentException | JwkException | MalformedURLException exception) {
+				log.error("Exception in JwtAuthenticationFilter", exception);
+				response.sendError(HttpStatus.INTERNAL_SERVER_ERROR.value(), INVALID_TOKEN_ERROR);
+			}
+		} else {
+			response.sendError(HttpStatus.BAD_REQUEST.value(), NO_TOKEN_ERROR);
+		}
+
+		log.exit();
+	}
+
+	@Override
+	protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+		log.entry();
+		boolean result = allAuthSkipUrls.stream().anyMatch(p -> new AntPathMatcher().match(p.trim(), request.getRequestURI()));
+		return log.exit(result);
+	}
+
+	 /**
+	  * Method to return algorithm
+	  * @param jwtAlgorithm
+	  * @param publicKey
+	  * @return
+	  */
+	 private Algorithm getAlgorithm(String jwtAlgorithm, PublicKey publicKey){
+		 log.entry("Getting Algorithm...");
+		 if(RSA256.equals(jwtAlgorithm)) {
+			 return Algorithm.RSA256((RSAPublicKey) publicKey, null);
+		 }
+		 else if(RSA384.equals(jwtAlgorithm)) {
+			 return Algorithm.RSA384((RSAPublicKey) publicKey, null);
+		 }
+		 else if(RSA512.equals(jwtAlgorithm)) {
+			 return Algorithm.RSA512((RSAPublicKey) publicKey, null);
+		 }else {
+			log.error("Algorithm not supported {}", jwtAlgorithm);
+			throw new IllegalArgumentException("Invalid algorithm type: " + jwtAlgorithm);
+		 }
+	 }
+
+}
+
+1. Above code explaination
+Flow Overview of JWT Validation :
+Request arrives at MS2.
+The filter extracts the JWT token from the Authorization header (Bearer <token>).
+The JWT is decoded and the public key is retrieved from the JWKS URL (configured in your properties).
+The JWT’s signature is verified using the corresponding RSA public key and the JWT algorithm.
+If the token is valid, the request continues to the next filter or handler.
+If the token is invalid or missing, an error is returned (400 Bad Request for missing token or 500 Internal Server Error for invalid token).
+
+------------------------------------------------------------------------------------
+
+If you want to call MS1 from MS2 below is the security code (client credentials)
+
+package com.bcp.c360.bcpmgmt.security;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.security.oauth2.client.AuthorizedClientServiceReactiveOAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.InMemoryReactiveOAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.ReactiveOAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.InMemoryReactiveClientRegistrationRepository;
+import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.reactive.function.client.ServerOAuth2AuthorizedClientExchangeFilterFunction;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import lombok.extern.slf4j.XSlf4j;
+import reactor.netty.http.client.HttpClient;
+
+
+@Component
+@XSlf4j
+public class BcpMgmtOAuthCredProvider {
+
+  private static final String CLIENT_REGISTRATION_ID = "keycloak";
+
+  /**
+   * This method returns ReactiveClientRegistrationRepository using the parameter taken from
+   * applcation.yaml
+   *
+   * @param tokenURI
+   * @param clientID
+   * @param clientSecret
+   * @return ReactiveClientRegistrationRepository
+   */
+  @Primary
+  @Bean("getRegistrationBcpMgmt")
+  ReactiveClientRegistrationRepository getRegistration(
+      @Value("${spring.security.oauth2.client.provider.keycloak.token-uri}") String tokenURI,
+      @Value("${spring.security.oauth2.client.registration.keycloak.client-id}") String clientID,
+      @Value("${spring.security.oauth2.client.registration.keycloak.client-secret}") String clientSecret) {
+    var clientRegistration = ClientRegistration.withRegistrationId(CLIENT_REGISTRATION_ID)
+        .tokenUri(tokenURI).clientId(clientID).clientSecret(clientSecret)
+        .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS).build();
+    return new InMemoryReactiveClientRegistrationRepository(clientRegistration);
+  }
+
+  /**
+   * This method uses the clientregistration bean to create and return a
+   * ReactiveOAuth2AuthorizedClientService
+   *
+   * @param clientRegistrations
+   * @return ReactiveOAuth2AuthorizedClientService
+   */
+  @Primary
+  @Bean("reactiveOAuth2AuthorizedClientServiceBcpMgmt")
+  ReactiveOAuth2AuthorizedClientService reactiveOAuth2AuthorizedClientService(
+      ReactiveClientRegistrationRepository clientRegistration) {
+    return new InMemoryReactiveOAuth2AuthorizedClientService(clientRegistration);
+  }
+
+  /**
+   * This method uses the clientRegistrations and authorizedClientService beans to create and return
+   * a bean of type WebClient
+   *
+   * @param clientRegistrations
+   * @param authorizedClientService
+   * @return Webclient
+   */
+  @Primary
+  @Bean("webClientBcpMgmt")
+  WebClient webClient(ReactiveClientRegistrationRepository clientRegistration,
+      ReactiveOAuth2AuthorizedClientService authorizedClientService) {
+    var oauth = new ServerOAuth2AuthorizedClientExchangeFilterFunction(
+        new AuthorizedClientServiceReactiveOAuth2AuthorizedClientManager(clientRegistration,
+            authorizedClientService));
+    oauth.setDefaultClientRegistrationId(CLIENT_REGISTRATION_ID);
+    return WebClient.builder()
+        .clientConnector(new ReactorClientHttpConnector(HttpClient.create().followRedirect(true)))
+        .filter(oauth).defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+        .build();
+  }
+}
