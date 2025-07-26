@@ -612,3 +612,239 @@ GET /api/users?page=1&size=5&sortBy=name  (For every new page this call will be 
 --------------------------------------------------------------------------------------
 
 23. What is idempotence in REST API's?
+
+--------------------------------------------------------------------------------------
+24. Kubernetes Load Balancing — How it Works /
+How load balancing is handled in your project ?
+
+- When you call: http://thirdpartymgmt/...
+you're hitting the Kubernetes Service named thirdpartymgmt.
+This service sits in front of multiple Pods (replicas of your microservice) and handles load balancing across them automatically.
+
+🔧 Internally:
+thirdpartymgmt is a ClusterIP service (default type).
+Kubernetes DNS (kube-dns or CoreDNS) resolves thirdpartymgmt to a virtual IP inside the cluster.
+That virtual IP maps to a list of healthy Pods behind the service (using selectors).
+The request is load balanced across the available Pods using iptables or IPVS, depending on your K8s setup.
+
+| Mechanism             | Description                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| **iptables**          | Packets are NAT'd and routed round-robin to a pod behind the service.                |
+| **IPVS** (if enabled) | Provides more advanced and efficient load balancing, especially for high throughput. |
+
+http://thirdpartymgmt/thirdpartymgmt/rs/v1/thirdparty/accounts/123/placement/recall
+Each request could hit a different pod based on load balancing by the service.
+You can see which pod handled a request (for debugging) by logging the pod hostname or IP in your application.
+
+| Component               | Role                                      |
+| ----------------------- | ----------------------------------------- |
+| `http://thirdpartymgmt` | Resolved by K8s DNS to a ClusterIP        |
+| ClusterIP               | Routes traffic to one of the backing pods |
+| Load Balancing          | Done automatically via iptables or IPVS   |
+
+🔧 Key Components & Files Involved
+
+1. Deployment — defines pods (replicas) of your microservice
+📄 File: thirdpartymgmt-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thirdpartymgmt
+spec:
+  replicas: 3  # number of pods to load balance across
+  selector:
+    matchLabels:
+      app: thirdpartymgmt
+  template:
+    metadata:
+      labels:
+        app: thirdpartymgmt
+    spec:
+      containers:
+      - name: thirdpartymgmt
+        image: yourregistry/thirdpartymgmt:latest
+        ports:
+        - containerPort: 8080
+
+2. Service — exposes pods internally in the cluster, and load balances across them
+📄 File: thirdpartymgmt-service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: thirdpartymgmt // this will be out service name (https://thirdpartymgmt)
+spec:
+  selector:
+    app: thirdpartymgmt
+  ports:
+  - protocol: TCP
+    port: 80         # Service port (targeted by clients)
+    targetPort: 8080 # Container port in the pods
+  type: ClusterIP    # Default type for internal-only load balancing
+
+📌 This service allows internal access to http://thirdpartymgmt and load balances across the pods matched by app: thirdpartymgmt.
+
+3. DNS Resolution (automatic)
+No file needed — Kubernetes automatically handles service discovery via CoreDNS.
+You can resolve the service as:
+http://thirdpartymgmt (from same namespace)
+http://thirdpartymgmt.<namespace>.svc.cluster.local (from other namespaces)
+
+4. (Optional) Ingress — for external traffic (not needed for internal load balancing)
+If you're accessing the service from outside the cluster, you’d define an Ingress, but for internal-only load balancing, it’s not required.
+
+🔄 Internal Load Balancing Process
+A pod (client) makes a request to http://thirdpartymgmt/...
+CoreDNS resolves thirdpartymgmt to a virtual ClusterIP
+The Kube proxy (using iptables or IPVS) routes the traffic to one of the pods behind the service via round-robin
+
+Command to check on which IP our app is running : "kubectl get svc thirdpartymgmt"
+System.out.println("Handling request on pod: " + System.getenv("HOSTNAME"));
+
+
+---------------------------------------------------------------------------------
+ 25. What is Service Discovery? How it is implemented ?
+ - Service Discovery is the mechanism by which one pod finds and communicates with another pod (or service) without hardcoding IP addresses.
+
+ In Kubernetes, this is achieved through:
+
+ DNS-based resolution
+ Services (like ClusterIP) as stable endpoints in front of pods
+
+✅ In Your Setup
+You have:
+
+A Deployment creating multiple pods (replicas) of your microservice.
+A Service named thirdpartymgmt exposing those pods internally using type ClusterIP.
+
+kind: Service
+metadata:
+  name: thirdpartymgmt
+spec:
+  selector:
+    app: thirdpartymgmt
+  ports:
+    - port: 80
+      targetPort: 8080
+🧭 How Service Discovery Works Here
+🔗 1. Service Name = DNS Entry
+Kubernetes automatically creates a DNS name for your service:
+
+thirdpartymgmt.<namespace>.svc.cluster.local
+Or, from the same namespace, just:
+
+http://thirdpartymgmt
+So when a pod runs:
+
+curl http://thirdpartymgmt/thirdpartymgmt/rs/v1/thirdparty/accounts/123/placement/recall
+🧠 Here's what happens:
+The DNS query thirdpartymgmt goes to CoreDNS (built into the cluster).
+CoreDNS looks up the ClusterIP assigned to the service.
+The request is routed to that virtual IP, which is managed by kube-proxy.
+Kube-proxy (via iptables or IPVS) picks one of the available pods behind the service.
+The request is sent to the pod on port 8080.
+
+🔁 Visual Flow
+
+Client Pod ──> http://thirdpartymgmt ──┬─> Pod A (8080)
+                                      ├─> Pod B (8080)
+                                      └─> Pod C (8080)
+Each request is load balanced among the pods.
+
+-------------------------------------------
+
+Service discover :
++----------------+           +------------------+            +------------------+
+|  Client Pod    |           |    CoreDNS       |            |  Kubernetes      |
+| (calls URL)    |  DNS      | (internal DNS)   |            |  Service         |
+|                | --------> | (resolves name)  | ---------> | (ClusterIP)      |
+|                |           |                  |            | (virtual IP)     |
++----------------+           +------------------+            +------------------+
+                                                               |           |
+                                                           +---+----+  +---+----+
+                                                           | Pod A  |  | Pod B  |
+                                                           +--------+  +--------+
+Step-by-step:
+Client Pod wants to call your microservice:
+It tries to call http://thirdpartymgmt.
+The pod asks CoreDNS:
+“Hey, what’s the IP address for thirdpartymgmt?”
+CoreDNS replies with the ClusterIP:
+A virtual IP that Kubernetes assigned to the service.
+The pod sends the request to the ClusterIP.
+Kubernetes routes the request from the ClusterIP to one of the actual pods (Pod A or Pod B).
+Pod A or Pod B processes the request and sends back the response.
+
+| Term      | Role                                          |
+| --------- | --------------------------------------------- |
+| DNS       | The general system that turns names → IPs     |
+| CoreDNS   | The DNS server inside Kubernetes              |
+| ClusterIP | Virtual stable IP that points to your pods    |
+| Service   | The Kubernetes object that owns the ClusterIP |
+
+----
+Step-by-step Service Discovery in Kubernetes
+1. Define and deploy your pods via a Deployment
+Create multiple replicas of your microservice pods labeled (e.g., app: thirdpartymgmt).
+Pods get dynamically assigned IPs inside the cluster.
+
+2. Create a Kubernetes Service (type: ClusterIP)
+The service selects pods based on labels (app: thirdpartymgmt).
+Kubernetes assigns a stable ClusterIP to this service.
+The service exposes port 80 and forwards traffic to pods’ container port (e.g., 8080).
+
+3. Kubernetes DNS (CoreDNS) auto-creates DNS entries for services
+Inside the cluster, thirdpartymgmt resolves to the service’s ClusterIP automatically.
+From the same namespace, clients can use the short name thirdpartymgmt.
+From other namespaces, full DNS name is thirdpartymgmt.<namespace>.svc.cluster.local.
+
+4. Client pod makes a request to http://thirdpartymgmt/...
+The request resolves the DNS name thirdpartymgmt to the ClusterIP by CoreDNS.
+
+5. Kube-proxy routes traffic from ClusterIP to pod IPs
+The service IP acts as a virtual IP proxy.
+Using iptables or IPVS, kube-proxy load balances the request across the healthy pods behind the service.
+
+6. One of the selected pods receives the request
+Pod processes the request and returns the response.
+
+7. Repeat for subsequent requests
+Load balancing continues for every new request, distributing load among pods.
+
+
+------------------------------------------------------------------------
+
+🚪 What is Ingress in Kubernetes?
+Ingress is a Kubernetes object that acts like a smart entry gate for your cluster.
+It allows external HTTP/HTTPS traffic to reach your internal Services (microservices).
+
+🧠 Think of it like this:
+You have multiple microservices running inside your cluster.
+You want to expose them to the outside world (e.g., from a browser or API client).
+Instead of opening ports for each service, you define one common entry point — the Ingress.
+Based on the URL path or hostname, Ingress routes the request to the correct service.
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress
+spec:
+  rules:
+    - host: myapp.example.com
+      http:
+        paths:
+          - path: /payments
+            pathType: Prefix
+            backend:
+              service:
+                name: payment-service
+                port:
+                  number: 80
+          - path: /orders
+            pathType: Prefix
+            backend:
+              service:
+                name: order-service
+                port:
+                  number: 80
+
